@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+<div id="app">
+    <button @click="sayHello" v-throttle:click="500">多次点击</button>
+    <div style="height: 1000px"></div>
+    <img v-lazy="'test.png'">
+</div>
+<script src="../vue.js"></script>
+<script>
+    const lazyLoadPlugin = {
+        install(Vue, options) {
+            // 代替图片的loading图
+            const defaultSrc = options.default;
+            Vue.directive('lazy', {
+                bind(el, binding) {
+                    lazyLoadPlugin.init(el, binding.value, defaultSrc);
+                },
+                inserted(el) {
+                    if ('IntersectionObserver' in window) {
+                        lazyLoadPlugin.observe(el);
+                        return;
+                    }
+                    lazyLoadPlugin.listenerScroll(el);
+                },
+            })
+        },
+        // 初始化
+        init(el, dataSrc, defaultSrc) {
+            // data-src存储真实src，src存储loading图
+            el.setAttribute('data-src', dataSrc);
+            el.setAttribute('src', defaultSrc);
+        },
+        // 利用IntersectionObserver监听el是否进入视口
+        observe(el) {
+            const io = new IntersectionObserver(entries => {
+                const dataSrc = el.dataset.src;
+                if (entries[0].isIntersecting && dataSrc) {
+                    el.src = dataSrc;
+                    el.removeAttribute('data-src');
+                }
+            });
+            io.observe(el);
+        },
+        // 监听scroll事件
+        listenerScroll(el) {
+            const handler = lazyLoadPlugin.throttle(lazyLoadPlugin.load, 300);
+            lazyLoadPlugin.load(el);
+            window.addEventListener('scroll', handler.bind(el));
+        },
+        // 加载真实图片
+        load(el) {
+            const windowHeight = document.documentElement.clientHeight;
+            const elReact = el.getBoundingClientRect();
+            const dataSrc = el.dataset.src;
+            if (elReact.top - windowHeight < 0 && elReact.bottom > 0 && dataSrc) {
+                el.src = dataSrc;
+                el.removeAttribute('data-src');
+            }
+        },
+        // throttle节流
+        throttle(fn, delay, isImmediate = true) {
+            let prevTime = undefined;
+            return function (...args) {
+                const currentTime = Date.now();
+                prevTime = prevTime || currentTime;
+                if (currentTime - prevTime >= delay) {
+                    prevTime = currentTime;
+                    fn && fn.apply(this, args);
+                }
+            }
+        }
+    }
+
+    Vue.directive('throttle', {
+        bind(el, binding) {
+            const throttleTime = binding.value || 2000;
+            const throttleMethod = binding.arg || 'click';
+            let cbFun = null;
+            // 捕获阶段处理
+            el.addEventListener(throttleMethod, event => {
+                if (!cbFun) {
+                    cbFun = setTimeout(() => {
+                        cbFun = null;
+                    }, throttleTime);
+                } else {
+                    // 阻止事件冒泡和当前元素绑定的其他点击事件触发
+                    event && event.stopImmediatePropagation();
+                }
+            }, true);
+        }
+    });
+
+    Vue.use(lazyLoadPlugin, {
+        default: './default.png',
+    });
+
+    const app = new Vue({
+        methods: {
+            sayHello() {
+                console.log('hello');
+            }
+        },
+    });
+
+    app.$mount('#app');
+
+
+</script>
+</body>
+</html>
